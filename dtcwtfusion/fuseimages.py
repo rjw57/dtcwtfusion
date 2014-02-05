@@ -195,10 +195,11 @@ def shrink_coeffs(highpasses):
     # Estimate noise from first level coefficients:
     # \sigma_n = MAD(X_1) / 0.6745
 
-    # Compute median absolute deviation of wavelet magnitudes
+    # Compute median absolute deviation of wavelet magnitudes. This is more than
+    # a little magic compared to the 1d version.
     level1_mad_real = np.median(np.abs(highpasses[0].real - np.median(highpasses[0].real)))
     level1_mad_imag = np.median(np.abs(highpasses[0].imag - np.median(highpasses[0].imag)))
-    sigma_n = np.sqrt(level1_mad_real*level1_mad_real + level1_mad_imag+level1_mad_imag) / 0.6745
+    sigma_n = np.sqrt(level1_mad_real*level1_mad_real + level1_mad_imag+level1_mad_imag) / (np.sqrt(2) * 0.6745)
 
     # In this context, parent == coarse, child == fine. Work from
     # coarse to fine

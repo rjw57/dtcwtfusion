@@ -21,13 +21,19 @@ setup(
         'Programming Language :: Python :: 3',
     ],
 
+    entry_points = {
+        'console_scripts': [
+            'fuseimages = dtcwtfusion.fuseimages:main',
+        ],
+    },
+
     package_data = {
         'dtcwtfusion': [],
     },
 
     setup_requires=[ 'nose>=1.0', ],
 
-    install_requires=[ 'numpy', 'six', 'scipy', 'pillow', 'dtcwt', ],
+    install_requires=[ 'numpy', 'six', 'scipy', 'pillow', 'dtcwt', 'docopt', ],
 
     extras_require={
         'docs': [ 'sphinx', 'docutils', 'matplotlib', 'ipython', ],

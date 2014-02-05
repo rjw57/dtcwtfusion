@@ -13,6 +13,7 @@ Options:
     -v, --verbose                       Increase logging verbosity.
     -o PREFIX, --output-prefix=PREFIX   Prefix output filenames with PREFIX.
                                         [default: fused-]
+    --save-registered-frames            Save registered frames in npz format.
 
 """
 
@@ -265,7 +266,8 @@ def main():
     save_image(imprefix + 'mean-registered', np.mean(registered_frames, axis=2))
 
     logging.info('Saving registered frames')
-    np.savez_compressed(imprefix + 'registered-frames.npz', frames=registered_frames)
+    if options['--save-registered-frames']:
+        np.savez_compressed(imprefix + 'registered-frames.npz', frames=registered_frames)
 
     # Transform registered frames
     lowpasses, highpasses = transform_frames(registered_frames)

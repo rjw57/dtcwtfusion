@@ -1,3 +1,5 @@
+# vim: set fileencoding=utf8 :
+
 """Align, register and fuse images specified on the command line using the
 DTCWT fusion algorithm.
 
@@ -178,6 +180,58 @@ def reconstruct(lowpass, highpasses):
     t = dtcwtbackend.TransformDomainSignal(lowpass, highpasses)
     return transform.inverse(t).value
 
+def shrink_coeffs(highpasses):
+    """Implement Bivariate Laplacian shrinkage as described in [1].
+    *highpasses* is a sequence containing wavelet coefficients for each level
+    fine-to-coarse. Return a sequence containing the shrunken coefficients.
+
+    [1] A. Loza, D. Bull, N. Canagarajah, and A. Achim, “Non-gaussian model-
+    based fusion of noisy images in the wavelet domain,” Comput. Vis. Image
+    Underst., vol. 114, pp. 54–65, Jan. 2010.
+
+    """
+    shrunk_levels = []
+
+    # Estimate noise from first level coefficients:
+    # \sigma_n = MAD(X_1) / 0.6745
+
+    # Compute median absolute deviation of wavelet magnitudes
+    level1_mad_real = np.median(np.abs(highpasses[0].real - np.median(highpasses[0].real)))
+    level1_mad_imag = np.median(np.abs(highpasses[0].imag - np.median(highpasses[0].imag)))
+    sigma_n = np.sqrt(level1_mad_real*level1_mad_real + level1_mad_imag+level1_mad_imag) / 0.6745
+
+    # In this context, parent == coarse, child == fine. Work from
+    # coarse to fine
+    shrunk_levels.append(highpasses[-1])
+    for parent, child in zip(highpasses[-1:0:-1], highpasses[-2::-1]):
+        # We will shrink child coefficients.
+
+        # Rescale parent to be the size of child
+        parent = dtcwt.sampling.rescale(parent, child.shape[:2], method='nearest')
+
+        # Construct gain for shrinkage separately per direction and for real and imag
+        real_gain = np.ones_like(child.real)
+        imag_gain = np.ones_like(child.real)
+        for dir_idx in xrange(parent.shape[2]):
+            child_d = child[:,:,dir_idx]
+            parent_d = parent[:,:,dir_idx]
+
+            # Estimate sigma_w and gain for real
+            real_sigma_w = np.sqrt(np.maximum(1e-8, np.var(child_d.real) - sigma_n*sigma_n))
+            real_R = np.sqrt(parent_d.real*parent_d.real + child_d.real*child_d.real)
+            real_gain[:,:,dir_idx] = np.maximum(0, real_R - (np.sqrt(3)*sigma_n*sigma_n)/real_sigma_w) / real_R
+
+            # Estimate sigma_w and gain for imag
+            imag_sigma_w = np.sqrt(np.maximum(1e-8, np.var(child_d.imag) - sigma_n*sigma_n))
+            imag_R = np.sqrt(parent_d.imag*parent_d.imag + child_d.imag*child_d.imag)
+            imag_gain[:,:,dir_idx] = np.maximum(0, imag_R - (np.sqrt(3)*sigma_n*sigma_n)/imag_sigma_w) / imag_R
+
+        # Shrink child levels
+        shrunk = (child.real * real_gain) + 1j * (child.imag * imag_gain)
+        shrunk_levels.append(shrunk)
+
+    return shrunk_levels[::-1]
+
 def main():
     options = docopt(__doc__)
     imprefix = options['--output-prefix']
@@ -251,4 +305,9 @@ def main():
     logging.info('Computing maximum of inliners magnitude fused image')
     max_inlier_recon = reconstruct(lowpass_mean, tuple(mag*phase for mag, phase in zip(max_inlier_mags, phases)))
     save_image(imprefix + 'fused-max-inlier-dtcwt', max_inlier_recon)
+
+    logging.info('Computing maximum of inliners magnitude fused image w/ shrinkage')
+    max_inlier_shrink_recon = reconstruct(lowpass_mean,
+            shrink_coeffs(tuple(mag*phase for mag, phase in zip(max_inlier_mags, phases))))
+    save_image(imprefix + 'fused-max-inlier-shrink-dtcwt', max_inlier_shrink_recon)
 

@@ -15,10 +15,13 @@ selected as the template image :math:`T`. For each image :math:`I \in
 1. Compute the cross-correlation image :math:`C = (I \cdot w) \star (T \cdot
    w)` where :math:`w` is a two-dimensional Hanning window, :math:`\cdot`
    denotes pixel-wise multiplication and :math:`\star` is the cross-correlation
-   operator.
+   operator. Normalise this cross-correlation, :math:`C \rightarrow C \cdot (w
+   \star w)`.
 
 2. Find the location of the maximum of :math:`C` and compute the corresponding
-   translational shift for that location.
+   translational shift for that location. The maximum is found ignoring an
+   apron around the edge of the image to avoid over matching of small
+   overlap-regions.
 
 3. Warp :math:`I` according to that translation.
 

@@ -30,11 +30,8 @@ Combine all aligned images into the set of aligned images, :math:`\mathcal{I}_a`
 Registration
 ------------
 
-This step locally warps each aligned image to best match a template image.  The
-mean of all images in :math:`\mathcal{I}_a` is computed as the template image
-:math:`T`. The mean aligned images is chosen so that the registration does not
-try to over-fit to the per-frame high-frequency speckle in BIL imagery. For
-each image :math:`I \in \mathcal{I}_a`:
+This step locally warps each aligned image to best match the same template
+image as above. For each image :math:`I \in \mathcal{I}_a`:
 
 1. Compute the local affine warp mapping :math:`I` to :math:`T` as described in
    [1, 2].

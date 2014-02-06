@@ -16,6 +16,9 @@ Options:
     -r STRATEGY, --ref=STRATEGY         Use STRATEGY to select reference
                                         frame. [default: middle]
     --save-registered-frames            Save registered frames in npz format.
+    --save-registered-frame-images      Save registered frames, one image per frame.
+    --save-input-frames                 Save input frames in npz format.
+    --save-input-frame-images           Save input frames, one image per frame.
 
 The frame within <frames> used as a reference frame can be selected via the
 --ref flag.  The strategy can be one of:
@@ -271,6 +274,15 @@ def main():
     logging.info('Loading input frames')
     input_frames = load_frames(options['<frames>'], options['--normalise'])
 
+    if options['--save-input-frames']:
+        logging.info('Saving input frames')
+        np.savez_compressed(imprefix + 'input-frames.npz', frames=input_frames)
+
+    if options['--save-input-frame-images']:
+        logging.info('Saving input frame images')
+        for idx in xrange(input_frames.shape[2]):
+            save_image(imprefix + 'input-frame-{0:05d}'.format(idx), input_frames[:,:,idx])
+
     # Select the reference frame
     ref_strategy = options['--ref']
     if ref_strategy == 'middle':
@@ -311,9 +323,14 @@ def main():
     logging.info('Saving mean registered frame')
     save_image(imprefix + 'mean-registered', np.mean(registered_frames, axis=2))
 
-    logging.info('Saving registered frames')
     if options['--save-registered-frames']:
+        logging.info('Saving registered frames')
         np.savez_compressed(imprefix + 'registered-frames.npz', frames=registered_frames)
+
+    if options['--save-registered-frame-images']:
+        logging.info('Saving registered frame images')
+        for idx in xrange(registered_frames.shape[2]):
+            save_image(imprefix + 'registered-frame-{0:05d}'.format(idx), registered_frames[:,:,idx])
 
     # Transform registered frames
     lowpasses, highpasses = transform_frames(registered_frames)

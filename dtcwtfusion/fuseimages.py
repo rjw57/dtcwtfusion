@@ -74,7 +74,17 @@ def align(frames, template):
     xs, ys = np.meshgrid(np.arange(frames.shape[1]), np.arange(frames.shape[0]))
 
     # Calculate window to use in FFT convolve
-    w = np.outer(np.hanning(template.shape[0]), np.hanning(template.shape[1]))
+    w = np.outer(np.hamming(template.shape[0]), np.hamming(template.shape[1]))
+
+    # Calculate a normalisation for the cross-correlation
+    ccnorm = 1.0 / fftconvolve(w, w)
+
+    # Set border of normalisation to zero to avoid overfitting < minmatch x minmatch areas
+    minmatch = 100 # pixels
+    ccnorm[:,:minmatch] = 0
+    ccnorm[:,-minmatch:] = 0
+    ccnorm[:minmatch,:] = 0
+    ccnorm[-minmatch:,:] = 0
 
     # Normalise template
     tmpl_min = template.min()
@@ -92,7 +102,8 @@ def align(frames, template):
         norm_frame /= tmpl_max
 
         # Convolve template and frame
-        conv_im = fftconvolve(norm_template, np.fliplr(np.flipud(norm_frame)))
+        conv_im = fftconvolve(norm_template*w, np.fliplr(np.flipud(norm_frame))*w)
+        conv_im *= ccnorm
 
         # Find maximum location
         max_loc = np.unravel_index(conv_im.argmax(), conv_im.shape)
@@ -100,6 +111,7 @@ def align(frames, template):
         # Convert location to shift
         dy = max_loc[0] - template.shape[0]
         dx = max_loc[1] - template.shape[1]
+        logging.info('Offset computed to be ({0},{1})'.format(dx, dy))
 
         # Warp image
         warped_ims.append(dtcwt.sampling.sample(frame, xs-dx, ys-dy, method='bilinear'))

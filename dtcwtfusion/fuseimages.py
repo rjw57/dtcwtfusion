@@ -305,7 +305,7 @@ def main():
     save_image(imprefix + 'mean-aligned', np.mean(aligned_frames, axis=2))
 
     # Register frames to mean aligned frame
-    registered_frames = register(aligned_frames, np.mean(aligned_frames, axis=2))
+    registered_frames = register(aligned_frames, reference_frame)
 
     # Save mean registered frame
     logging.info('Saving mean registered frame')

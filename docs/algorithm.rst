@@ -13,7 +13,7 @@ selected as the template image :math:`T`. For each image :math:`I \in
 \mathcal{I}`:
 
 1. Compute the cross-correlation image :math:`C = (I \cdot w) \star (T \cdot
-   w)` where :math:`w` is a two-dimensional Hanning window, :math:`\cdot`
+   w)` where :math:`w` is a two-dimensional Hamming window, :math:`\cdot`
    denotes pixel-wise multiplication and :math:`\star` is the cross-correlation
    operator. Normalise this cross-correlation, :math:`C \rightarrow C \cdot (w
    \star w)`.

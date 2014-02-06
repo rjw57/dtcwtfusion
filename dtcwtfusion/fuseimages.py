@@ -1,18 +1,32 @@
 # vim: set fileencoding=utf8 :
 
-"""Align, register and fuse images specified on the command line using the
+"""Align, register and fuse frames specified on the command line using the
 DTCWT fusion algorithm.
 
 Usage:
-    fuseimages [options] <images>...
-    fuseimages (-h | --help)
+    fuseframes [options] <frames>...
+    fuseframes (-h | --help)
 
 Options:
-    -n, --normalise                     Re-normalise input images to the interval [0,1].
+    -n, --normalise                     Re-normalise input frames to lie on the
+                                        interval [0,1].
     -v, --verbose                       Increase logging verbosity.
     -o PREFIX, --output-prefix=PREFIX   Prefix output filenames with PREFIX.
                                         [default: fused-]
+    -r STRATEGY, --ref=STRATEGY         Use STRATEGY to select reference
+                                        frame. [default: middle]
     --save-registered-frames            Save registered frames in npz format.
+
+The frame within <frames> used as a reference frame can be selected via the
+--ref flag.  The strategy can be one of:
+
+    middle      Use the middle frame.
+    first       Use the first frame.
+    last        Use the last frame.
+    max-mean    Use the frame with the maximum mean value. This is useful in
+                the situation where you have a large number of blank frames in
+                the input sequence.
+    max-range   Use the frame with the maximum range of values.
 
 """
 
@@ -29,13 +43,13 @@ from PIL import Image
 from scipy.signal import fftconvolve
 from six.moves import xrange
 
-def load_images(filenames, normalise=False):
-    """Load images from *filenames* returning a 3D-array with all pixel values.
-    If *normalise* is True, then input images are normalised onto the range
+def load_frames(filenames, normalise=False):
+    """Load frames from *filenames* returning a 3D-array with all pixel values.
+    If *normalise* is True, then input frames are normalised onto the range
     [0,1].
 
     """
-    images = []
+    frames = []
 
     for fn in filenames:
         # Load image with PIL
@@ -51,16 +65,16 @@ def load_images(filenames, normalise=False):
             im_array /= im_array.max()
 
         # If this isn't the first image, check that shapes are consistent
-        if len(images) > 0:
-            if im_array.shape != images[-1].shape:
+        if len(frames) > 0:
+            if im_array.shape != frames[-1].shape:
                 logging.warn('Skipping "{fn}" with inconsistent shape'.format(fn=fn))
                 continue
 
-        images.append(im_array)
+        frames.append(im_array)
 
-    logging.info('Loaded {0} image(s)'.format(len(images)))
+    logging.info('Loaded {0} image(s)'.format(len(frames)))
 
-    return np.dstack(images)
+    return np.dstack(frames)
 
 def align(frames, template):
     """
@@ -79,12 +93,12 @@ def align(frames, template):
     # Calculate a normalisation for the cross-correlation
     ccnorm = 1.0 / fftconvolve(w, w)
 
-    # Set border of normalisation to zero to avoid overfitting < minmatch x minmatch areas
-    minmatch = 100 # pixels
-    ccnorm[:,:minmatch] = 0
-    ccnorm[:,-minmatch:] = 0
-    ccnorm[:minmatch,:] = 0
-    ccnorm[-minmatch:,:] = 0
+    # Set border of normalisation to zero to avoid overfitting. Borser is set so that there
+    # must be a minimum of half-frame overlap
+    ccnorm[:(template.shape[0]>>1),:] = 0
+    ccnorm[-(template.shape[0]>>1):,:] = 0
+    ccnorm[:,:(template.shape[1]>>1)] = 0
+    ccnorm[:,-(template.shape[1]>>1):] = 0
 
     # Normalise template
     tmpl_min = template.min()
@@ -102,15 +116,15 @@ def align(frames, template):
         norm_frame /= tmpl_max
 
         # Convolve template and frame
-        conv_im = fftconvolve(norm_template*w, np.fliplr(np.flipud(norm_frame))*w)
+        conv_im = fftconvolve(norm_template*w, np.fliplr(np.flipud(norm_frame*w)))
         conv_im *= ccnorm
 
         # Find maximum location
         max_loc = np.unravel_index(conv_im.argmax(), conv_im.shape)
 
         # Convert location to shift
-        dy = max_loc[0] - template.shape[0]
-        dx = max_loc[1] - template.shape[1]
+        dy = max_loc[0] - template.shape[0] + 1
+        dx = max_loc[1] - template.shape[1] + 1
         logging.info('Offset computed to be ({0},{1})'.format(dx, dy))
 
         # Warp image
@@ -198,7 +212,7 @@ def shrink_coeffs(highpasses):
     fine-to-coarse. Return a sequence containing the shrunken coefficients.
 
     [1] A. Loza, D. Bull, N. Canagarajah, and A. Achim, “Non-gaussian model-
-    based fusion of noisy images in the wavelet domain,” Comput. Vis. Image
+    based fusion of noisy frames in the wavelet domain,” Comput. Vis. Image
     Underst., vol. 114, pp. 54–65, Jan. 2010.
 
     """
@@ -254,22 +268,43 @@ def main():
     logging.basicConfig(level=loglevel)
 
     # Load inputs
-    logging.info('Loading input images')
-    input_frames = load_images(options['<images>'], options['--normalise'])
+    logging.info('Loading input frames')
+    input_frames = load_frames(options['<frames>'], options['--normalise'])
+
+    # Select the reference frame
+    ref_strategy = options['--ref']
+    if ref_strategy == 'middle':
+        reference_frame = input_frames[:,:,input_frames.shape[2]>>1]
+    elif ref_strategy == 'first':
+        reference_frame = input_frames[:,:,0]
+    elif ref_strategy == 'last':
+        reference_frame = input_frames[:,:,-1]
+    elif ref_strategy == 'max-mean':
+        means = np.array(list(np.mean(input_frames[:,:,idx]) for idx in xrange(input_frames.shape[2])))
+        reference_frame = input_frames[:,:,means.argmax()]
+    elif ref_strategy == 'max-range':
+        ranges = np.array(list(input_frames[:,:,idx].max() - input_frames[:,:,idx].min()
+                               for idx in xrange(input_frames.shape[2])))
+        reference_frame = input_frames[:,:,ranges.argmax()]
+    else:
+        logging.error('Unknown reference strategy: {0}'.format(ref_strategy))
+        return 1
+
+    logging.info('Using reference strategy: {0}'.format(ref_strategy))
 
     # Save sample frame
     logging.info('Saving sample frame')
-    save_image(imprefix + 'sample-frame', input_frames[:,:,input_frames.shape[2]>>1])
+    save_image(imprefix + 'sample-frame', reference_frame)
 
-    # Align images to *centre* frame
-    logging.info('Aligning images')
-    aligned_frames = align(input_frames, input_frames[:,:,input_frames.shape[2]>>1])
+    # Align frames to *centre* frame
+    logging.info('Aligning frames')
+    aligned_frames = align(input_frames, reference_frame)
 
     # Save mean aligned frame
     logging.info('Saving mean aligned frame')
     save_image(imprefix + 'mean-aligned', np.mean(aligned_frames, axis=2))
 
-    # Register images to mean aligned frame
+    # Register frames to mean aligned frame
     registered_frames = register(aligned_frames, np.mean(aligned_frames, axis=2))
 
     # Save mean registered frame

@@ -3,6 +3,15 @@ DTCWT-based image fusion
 
 This is an experimental implementation of DTCWT-based image fusion as described in [1].
 
+Installation
+------------
+
+Installation can be performed via ``pip`` directly from the command line:
+
+.. code:: console
+
+    $ pip install git+https://github.com/rjw57/dtcwtfusion.git
+
 Documentation
 -------------
 

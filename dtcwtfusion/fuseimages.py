@@ -15,6 +15,8 @@ Options:
                                         [default: fused-]
     -r STRATEGY, --ref=STRATEGY         Use STRATEGY to select reference
                                         frame. [default: middle]
+    --register-to=REFERENCE             Which frame to use as registration reference.
+                                        [default: mean-aligned]
     --save-registered-frames            Save registered frames in npz format.
     --save-registered-frame-images      Save registered frames, one image per frame.
     --save-input-frames                 Save input frames in npz format.
@@ -30,6 +32,14 @@ The frame within <frames> used as a reference frame can be selected via the
                 the situation where you have a large number of blank frames in
                 the input sequence.
     max-range   Use the frame with the maximum range of values.
+
+The frame to be used as reference for the DTCWT-based image registration can be
+selected via the --register-to flag. It can take the following values:
+
+    mean-aligned    Use the mean of the aligned frames. This is useful if your
+                    input images are very noisy since it avoids
+                    "over-registering" to the noise.
+    reference       Uae the same image as the bulk alignment step.
 
 """
 
@@ -311,13 +321,22 @@ def main():
     # Align frames to *centre* frame
     logging.info('Aligning frames')
     aligned_frames = align(input_frames, reference_frame)
+    mean_aligned_frame = np.mean(aligned_frames, axis=2)
 
     # Save mean aligned frame
     logging.info('Saving mean aligned frame')
-    save_image(imprefix + 'mean-aligned', np.mean(aligned_frames, axis=2))
+    save_image(imprefix + 'mean-aligned', mean_aligned_frame)
 
-    # Register frames to mean aligned frame
-    registered_frames = register(aligned_frames, reference_frame)
+    # Register frames
+    registration_ref_src = options['--register-to']
+    if registration_ref_src == 'mean-aligned':
+        registration_reference = mean_aligned_frame
+    elif registration_ref_src == 'reference':
+        registration_reference = reference_frame
+    else:
+        logging.error('Unknown registration source: {0}'.format(registration_ref_src))
+        return 1
+    registered_frames = register(aligned_frames, registration_reference)
 
     # Save mean registered frame
     logging.info('Saving mean registered frame')

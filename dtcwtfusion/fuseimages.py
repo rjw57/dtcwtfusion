@@ -8,7 +8,6 @@ Usage:
     fuseimages (-h | --help)
 
 Options:
-
     -n, --normalise                     Re-normalise input images to the interval [0,1].
     -v, --verbose                       Increase logging verbosity.
     -o PREFIX, --output-prefix=PREFIX   Prefix output filenames with PREFIX.

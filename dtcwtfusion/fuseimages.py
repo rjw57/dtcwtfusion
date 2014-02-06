@@ -43,9 +43,11 @@ selected via the --register-to flag. It can take the following values:
 
 """
 
-from __future__ import print_function, division
+from __future__ import print_function, division, absolute_import
 
 import logging
+
+from ._images2gif import writeGif
 
 import dtcwt.backend.backend_numpy as dtcwtbackend
 import dtcwt.registration
@@ -178,7 +180,7 @@ def register(frames, template, nlevels=7):
 
     return np.dstack(warped_ims)
 
-def save_image(filename, array):
+def tonemap(array):
     # The normalisation strategy here is to let the middle 98% of
     # the values fall in the range 0.01 to 0.99 ('black' and 'white' level).
     black_level = np.percentile(array,  1)
@@ -188,9 +190,11 @@ def save_image(filename, array):
     norm_array /= (white_level - black_level)
     norm_array = np.clip(norm_array + 0.01, 0, 1)
 
+    return np.array(norm_array * 255, dtype=np.uint8)
+
+def save_image(filename, array):
     # Copy is workaround for http://goo.gl/8fuOJA
-    im_array = np.array(norm_array * 255, dtype=np.uint8)
-    im = Image.fromarray(im_array.copy(), 'L')
+    im = Image.fromarray(tonemap(array).copy(), 'L')
 
     logging.info('Saving "{0}"'.format(filename + '.png'))
     im.save(filename + '.png')
@@ -396,3 +400,21 @@ def main():
             shrink_coeffs(tuple(mag*phase for mag, phase in zip(max_inlier_mags, phases))))
     save_image(imprefix + 'fused-max-inlier-shrink-dtcwt', max_inlier_shrink_recon)
 
+    # Save final animation
+    shape = np.min((
+        input_frames.shape[:2], aligned_frames.shape[:2],
+        registered_frames.shape[:2], max_inlier_shrink_recon.shape
+    ), axis=0)
+    anim_frames = tonemap(np.vstack((
+        np.hstack((input_frames[:shape[0],:shape[1]], aligned_frames[:shape[0],:shape[1]])),
+        np.hstack((registered_frames[:shape[0],:shape[1]],
+                   np.repeat(max_inlier_shrink_recon[:shape[0],:shape[1],np.newaxis],
+                             input_frames.shape[2], axis=2))),
+    )))
+    anim_filename = imprefix + 'aligned-and-registered-anim.gif'
+    logging.info('Saving animation to "{0}"'.format(anim_filename))
+    # Copy is workaround for http://goo.gl/8fuOJA
+    writeGif(anim_filename,
+             list(Image.fromarray(anim_frames[:,:,idx].copy(), 'L')
+                  for idx in xrange(anim_frames.shape[2])),
+             duration=0.1)

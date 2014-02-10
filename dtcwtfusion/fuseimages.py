@@ -49,7 +49,7 @@ import logging
 
 from ._images2gif import writeGif
 
-import dtcwt.backend.backend_numpy as dtcwtbackend
+import dtcwt
 import dtcwt.registration
 import dtcwt.sampling
 from docopt import docopt
@@ -159,7 +159,7 @@ def register(frames, template, nlevels=7):
     norm_template /= tmpl_max
 
     # Transform template
-    transform = dtcwtbackend.Transform2d()
+    transform = dtcwt.Transform2d()
     template_t = transform.forward(norm_template, nlevels=nlevels)
 
     warped_ims = []
@@ -206,7 +206,7 @@ def transform_frames(frames, nlevels=7):
     for idx in xrange(nlevels):
         highpasses.append([])
 
-    transform = dtcwtbackend.Transform2d()
+    transform = dtcwt.Transform2d()
     for frame_idx in xrange(frames.shape[2]):
         logging.info('Transforming frame {0}/{1}'.format(frame_idx+1, frames.shape[2]))
         frame = frames[:,:,frame_idx]
@@ -214,14 +214,14 @@ def transform_frames(frames, nlevels=7):
 
         lowpasses.append(frame_t.lowpass)
         for idx in xrange(nlevels):
-            highpasses[idx].append(frame_t.subbands[idx][:,:,:,np.newaxis])
+            highpasses[idx].append(frame_t.highpasses[idx][:,:,:,np.newaxis])
 
     return np.dstack(lowpasses), tuple(np.concatenate(hp, axis=3) for hp in highpasses)
 
 def reconstruct(lowpass, highpasses):
-    transform = dtcwtbackend.Transform2d()
-    t = dtcwtbackend.TransformDomainSignal(lowpass, highpasses)
-    return transform.inverse(t).value
+    transform = dtcwt.Transform2d()
+    t = dtcwt.Pyramid(lowpass, highpasses)
+    return transform.inverse(t)
 
 def shrink_coeffs(highpasses):
     """Implement Bivariate Laplacian shrinkage as described in [1].

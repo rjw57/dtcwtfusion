@@ -33,7 +33,7 @@ setup(
 
     setup_requires=[ 'nose>=1.0', ],
 
-    install_requires=[ 'numpy', 'six', 'scipy', 'pillow', 'dtcwt', 'docopt', ],
+    install_requires=[ 'numpy', 'six', 'scipy', 'pillow', 'dtcwt>0.8.0', 'docopt', ],
 
     extras_require={
         'docs': [ 'sphinx', 'docutils', 'matplotlib', 'ipython', ],

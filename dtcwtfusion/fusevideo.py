@@ -269,8 +269,11 @@ def main():
     fused_frames = denoised_frames = None
 
     # Select reference frames according to window
-    frame_indices = np.arange(input_frames.shape[2])
-    for ref_idx in frame_indices[half_window_size:-(half_window_size+1)]:
+    frame_indices = output.create_dataset('processed_indices',
+            data=np.arange(input_frames.shape[2])[half_window_size:-(half_window_size+1)],
+            compression='gzip')
+    frame_indices.attrs.create('description', 'Slice indices into /frames for each frame of output')
+    for ref_idx in frame_indices:
         logging.info('Processing frame {0}'.format(ref_idx))
 
         reference_frame = input_frames[:,:,ref_idx]
@@ -323,8 +326,10 @@ def main():
                     chunks=max_inlier_recon.shape + (1,), compression='gzip',
                     dtype=max_inlier_recon.dtype)
             fused_frames.attrs.create('description', 'Aligned, registered and wavelet fused frames')
+            fused_frames.attrs.create('frame_count', 0)
 
-        fused_frames[:,:,ref_idx-half_window_size] = max_inlier_recon
+        fused_frames[:,:,fused_frames.attrs['frame_count']] = max_inlier_recon
+        fused_frames.attrs['frame_count'] += 1
 
         logging.info('Computing maximum of inliners magnitude fused image w/ shrinkage')
         max_inlier_shrink_recon = reconstruct(lowpass_mean,
@@ -336,5 +341,7 @@ def main():
                     chunks=output_shape[:2] + (1,), compression='gzip',
                     dtype=max_inlier_shrink_recon.dtype)
             denoised_frames.attrs.create('description', 'Fused frames after wavelet shrinkage')
+            denoised_frames.attrs.create('frame_count', 0)
 
-        denoised_frames[:,:,ref_idx-half_window_size] = max_inlier_shrink_recon
+        denoised_frames[:,:,denoised_frames.attrs['frame_count']] = max_inlier_shrink_recon
+        denoised_frames.attrs['frame_count'] += 1

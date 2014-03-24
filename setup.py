@@ -24,6 +24,7 @@ setup(
     entry_points = {
         'console_scripts': [
             'fuseimages = dtcwtfusion.fuseimages:main',
+            'fusevideo = dtcwtfusion.fusevideo:main',
         ],
     },
 
@@ -33,7 +34,10 @@ setup(
 
     setup_requires=[ 'nose>=1.0', ],
 
-    install_requires=[ 'numpy', 'six', 'scipy', 'pillow', 'dtcwt>0.8.0', 'docopt', ],
+    install_requires=[
+        'numpy', 'six', 'scipy', 'pillow', 'dtcwt>0.8.0', 'docopt',
+        'h5py',
+    ],
 
     extras_require={
         'docs': [ 'sphinx', 'docutils', 'matplotlib', 'ipython', ],

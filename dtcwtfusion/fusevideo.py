@@ -4,24 +4,24 @@
 DTCWT fusion algorithm.
 
 Usage:
-    fusevideo [options] <frames>...
+    fusevideo [options] -o <output> <frames>...
     fusevideo (-h | --help)
 
 Options:
     -n, --normalise                     Re-normalise input frames to lie on the
                                         interval [0,1].
     -v, --verbose                       Increase logging verbosity.
-    -o PREFIX, --output-prefix=PREFIX   Prefix output filenames with PREFIX.
-                                        [default: fused-]
     -w FRAMES, --window=FRAMES          Sliding half-window size. [default: 5]
+
+Output will be saved in HDF5 format to <output>. Input is read from the TIFF
+files listed as <frames>...
 
 """
 
 from __future__ import print_function, division, absolute_import
 
 import logging
-
-from ._images2gif import writeGif
+import sys
 
 import dtcwt
 import dtcwt.registration
@@ -31,16 +31,18 @@ import numpy as np
 from PIL import Image
 from scipy.signal import fftconvolve
 from six.moves import xrange
+import h5py
 
-def load_frames(filenames, normalise=False):
+def load_frames(h5, filenames, normalise=False, dataset_name='input'):
     """Load frames from *filenames* returning a 3D-array with all pixel values.
     If *normalise* is True, then input frames are normalised onto the range
-    [0,1].
+    [0,1]. A dataset will be created in the HDF5 file/group *h5* with name
+    *dataset_name*.
 
     """
-    frames = []
+    dataset = None
 
-    for fn in filenames:
+    for f_idx, fn in enumerate(filenames):
         # Load image with PIL
         logging.info('Loading "{fn}"'.format(fn=fn))
         im = Image.open(fn)
@@ -48,22 +50,26 @@ def load_frames(filenames, normalise=False):
         # Extract data and store as floating point data
         im_array = np.array(im.getdata(), dtype=np.float32).reshape(im.size[::-1])
 
+        # If we've not yet created the dataset, do so
+        if dataset is None:
+            dataset = h5.create_dataset(dataset_name, im_array.shape + (len(filenames),),
+                    dtype=im_array.dtype, chunks=im_array.shape + (1,),
+                    compression='gzip')
+
         # If we are to normalise, do so
         if normalise:
             im_array -= im_array.min()
             im_array /= im_array.max()
 
-        # If this isn't the first image, check that shapes are consistent
-        if len(frames) > 0:
-            if im_array.shape != frames[-1].shape:
-                logging.warn('Skipping "{fn}" with inconsistent shape'.format(fn=fn))
-                continue
+        # Write result to HDF5
+        dataset[:,:,f_idx] = im_array
 
-        frames.append(im_array)
+    if dataset is not None:
+        logging.info('Loaded {0} image(s)'.format(dataset.shape[2]))
+    else:
+        logging.warn('No images were loaded')
 
-    logging.info('Loaded {0} image(s)'.format(len(frames)))
-
-    return np.dstack(frames)
+    return dataset
 
 def align(frames, template):
     """
@@ -154,25 +160,6 @@ def register(frames, template, nlevels=7):
 
     return np.dstack(warped_ims)
 
-def tonemap(array):
-    # The normalisation strategy here is to let the middle 98% of
-    # the values fall in the range 0.01 to 0.99 ('black' and 'white' level).
-    black_level = np.percentile(array,  1)
-    white_level = np.percentile(array, 99)
-
-    norm_array = array - black_level
-    norm_array /= (white_level - black_level)
-    norm_array = np.clip(norm_array + 0.01, 0, 1)
-
-    return np.array(norm_array * 255, dtype=np.uint8)
-
-def save_image(filename, array):
-    # Copy is workaround for http://goo.gl/8fuOJA
-    im = Image.fromarray(tonemap(array).copy(), 'L')
-
-    logging.info('Saving "{0}"'.format(filename + '.png'))
-    im.save(filename + '.png')
-
 def transform_frames(frames, nlevels=7):
     # Transform each registered frame storing result
     lowpasses = []
@@ -252,28 +239,41 @@ def shrink_coeffs(highpasses):
 
 def main():
     options = docopt(__doc__)
-    imprefix = options['--output-prefix']
 
     # Set up logging according to command line options
     loglevel = logging.INFO if options['--verbose'] else logging.WARN
     logging.basicConfig(level=loglevel)
 
+    # Open output
+    logging.info('Creating output HDF5 file at "{0}"'.format(options['<output>']))
+    output = h5py.File(options['<output>'], 'w')
+
     # Load inputs
     logging.info('Loading input frames')
-    input_frames = load_frames(options['<frames>'], options['--normalise'])
+    input_frames = load_frames(output, options['<frames>'], options['--normalise'])
+    input_frames.attrs.create('description', 'Input frames')
+
+    # Check there are enough frames
+    half_window_size = int(options['--window'])
+    if input_frames.shape[2] - (2*half_window_size + 1) <= 0:
+        logging.error('Too few frames ({0}) for half window size ({1})'.format(
+            input_frames.shape[2], half_window_size))
+        sys.exit(1)
+
+    # Create storage for output
+    output_shape = list(input_frames.shape)
+    output_shape[2] -= (2*half_window_size + 1)
+    output_shape = tuple(output_shape)
+
+    # These datasets will be created in the loop below
+    fused_frames = denoised_frames = None
 
     # Select reference frames according to window
     frame_indices = np.arange(input_frames.shape[2])
-    half_window_size = int(options['--window'])
     for ref_idx in frame_indices[half_window_size:-(half_window_size+1)]:
         logging.info('Processing frame {0}'.format(ref_idx))
 
         reference_frame = input_frames[:,:,ref_idx]
-
-        logging.info('Saving input frame')
-        save_image(imprefix + 'input-{0:05d}'.format(ref_idx-half_window_size),
-                reference_frame)
-
         stack = input_frames[:,:,ref_idx-half_window_size:ref_idx+half_window_size+1]
 
         # Align frames to *centre* frame
@@ -284,11 +284,6 @@ def main():
         logging.info('Registering frames')
         registration_reference = reference_frame
         registered_frames = register(aligned_frames, registration_reference)
-
-        # Save mean registered frame
-        logging.info('Saving mean registered frame')
-        save_image(imprefix + 'mean-registered-{0:05d}'.format(ref_idx-half_window_size),
-                np.mean(registered_frames, axis=2))
 
         # Transform registered frames
         lowpasses, highpasses = transform_frames(registered_frames)
@@ -321,11 +316,25 @@ def main():
         logging.info('Computing maximum of inliners magnitude fused image')
         max_inlier_recon = reconstruct(lowpass_mean,
                 tuple(mag*phase for mag, phase in zip(max_inlier_mags, phases)))
-        save_image(imprefix + 'fused-max-inlier-dtcwt-{0:05d}'.format(ref_idx-half_window_size),
-                max_inlier_recon)
+
+        if fused_frames is None:
+            fused_frames = output.create_dataset('fused',
+                    max_inlier_recon.shape + (output_shape[2],),
+                    chunks=max_inlier_recon.shape + (1,), compression='gzip',
+                    dtype=max_inlier_recon.dtype)
+            fused_frames.attrs.create('description', 'Aligned, registered and wavelet fused frames')
+
+        fused_frames[:,:,ref_idx-half_window_size] = max_inlier_recon
 
         logging.info('Computing maximum of inliners magnitude fused image w/ shrinkage')
         max_inlier_shrink_recon = reconstruct(lowpass_mean,
                 shrink_coeffs(tuple(mag*phase for mag, phase in zip(max_inlier_mags, phases))))
-        save_image(imprefix + 'fused-max-inlier-shrink-{0:05d}'.format(ref_idx-half_window_size),
-                max_inlier_shrink_recon)
+
+        if denoised_frames is None:
+            denoised_frames = output.create_dataset('denoised',
+                    max_inlier_shrink_recon.shape + (output_shape[2],),
+                    chunks=output_shape[:2] + (1,), compression='gzip',
+                    dtype=max_inlier_shrink_recon.dtype)
+            denoised_frames.attrs.create('description', 'Fused frames after wavelet shrinkage')
+
+        denoised_frames[:,:,ref_idx-half_window_size] = max_inlier_shrink_recon

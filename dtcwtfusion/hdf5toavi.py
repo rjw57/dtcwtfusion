@@ -9,6 +9,7 @@ Usage:
 Options:
     -v, --verbose                       Increase logging verbosity.
     --write-input=FILE                  Save input frames to FILE
+    --fps=NUM                           Set frames per second. [default: 10]
 
 """
 
@@ -37,6 +38,7 @@ def tonemap(array):
 
 def main():
     options = docopt(__doc__)
+    fps = int(options['--fps'])
 
     # Set up logging according to command line options
     loglevel = logging.INFO if options['--verbose'] else logging.WARN
@@ -49,14 +51,14 @@ def main():
         logging.info('Writing input frames to "{0}"'.format(options['--write-input']))
 
         vw = cv2.VideoWriter(options['--write-input'], cv2.cv.FOURCC(*'MJPG'),
-                10, h5['input'].shape[1::-1], False)
+                fps, h5['input'].shape[1::-1], False)
         for idx in xrange(h5['input'].shape[2]):
             vw.write(tonemap(h5['input'][:,:,idx]))
         vw.release()
 
     logging.info('Writing fused and denoised frames to "{0}"'.format(options['<avi>']))
     vw = cv2.VideoWriter(options['<avi>'], cv2.cv.FOURCC(*'MJPG'),
-            10, h5['denoised'].shape[1::-1], False)
+            fps, h5['denoised'].shape[1::-1], False)
     for idx in xrange(h5['denoised'].attrs['frame_count']):
         vw.write(tonemap(h5['denoised'][:,:,idx]))
     vw.release()

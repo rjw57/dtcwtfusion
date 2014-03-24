@@ -39,7 +39,7 @@ selected via the --register-to flag. It can take the following values:
     mean-aligned    Use the mean of the aligned frames. This is useful if your
                     input images are very noisy since it avoids
                     "over-registering" to the noise.
-    reference       Uae the same image as the bulk alignment step.
+    reference       Use the same image as the bulk alignment step.
 
 """
 

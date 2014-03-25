@@ -27,14 +27,14 @@ import cv2
 import numpy as np
 
 def tonemap(array):
-    # The normalisation strategy here is to let the middle 98% of
-    # the values fall in the range 0.01 to 0.99 ('black' and 'white' level).
-    black_level = np.percentile(array,  1)
-    white_level = np.percentile(array, 99)
+    # The normalisation strategy here is to let the middle 95% of
+    # the values fall in the range 0.025 to 0.975 ('black' and 'white' level).
+    black_level = np.percentile(array,  2.5)
+    white_level = np.percentile(array, 97.5)
 
     norm_array = array - black_level
-    norm_array /= (white_level - black_level)
-    norm_array = np.clip(norm_array + 0.01, 0, 1)
+    norm_array *= 0.95 / (white_level - black_level)
+    norm_array = np.clip(norm_array + 0.025, 0, 1)
 
     return np.array(norm_array * 255, dtype=np.uint8)
 

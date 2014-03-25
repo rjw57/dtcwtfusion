@@ -33,8 +33,8 @@ def tonemap(array):
     white_level = np.percentile(array, 97.5)
 
     norm_array = array - black_level
-    norm_array *= 0.95 / (white_level - black_level)
-    norm_array = np.clip(norm_array + 0.025, 0, 1)
+    norm_array *= 0.7 / (white_level - black_level)
+    norm_array = np.clip(norm_array + 0.15, 0, 1)
 
     return np.array(norm_array * 255, dtype=np.uint8)
 

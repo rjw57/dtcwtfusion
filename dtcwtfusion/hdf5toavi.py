@@ -11,6 +11,8 @@ Options:
     --write-input=FILE                  Save input frames to FILE
     -c, --comparison                    Generate side-by-side comparison
     --fps=NUM                           Set frames per second. [default: 10]
+    -g NAME, --group=NAME               Which group from the HDF5 should be rendered
+                                        [default: median_shrink]
 
 """
 
@@ -85,14 +87,14 @@ def main():
     h5 = h5py.File(options['<hdf5>'])
 
     input_frames = h5['input']
-    denoised_frames = h5['median_shrink']
+    denoised_frames = h5[options['--group']]
 
     if options['--write-input'] is not None:
         logging.info('Writing input frames to "{0}"'.format(options['--write-input']))
 
         write_output(options['--write-input'], fps, input_frames)
 
-    logging.info('Writing fused and denoised frames to "{0}"'.format(options['<avi>']))
+    logging.info('Writing "{1}" frames to "{0}"'.format(options['<avi>'], options['--group']))
     if options['--comparison']:
         write_output(options['<avi>'], fps,
                 left=input_frames, right=denoised_frames,

@@ -59,9 +59,9 @@ def write_output(filename, fps, left, right=None, leftidxs=None, rightidxs=None)
         else:
             rightidxs = leftidxs
 
-    vw = cv2.VideoWriter(filename, cv2.cv.FOURCC(*'MJPG'),
-            fps, output_frame.shape[::-1], False)
+    vw = cv2.VideoWriter(filename, cv2.cv.FOURCC(*'MJPG'), fps, output_frame.shape[::-1])
 
+    rgba_output = np.ones(output_frame.shape + (3,), dtype=np.uint8)
     for lidx, ridx in itertools.izip(leftidxs, rightidxs):
         output_frame[:left.shape[0], :left.shape[1]] = tonemap(left[:,:,lidx])
 
@@ -69,7 +69,9 @@ def write_output(filename, fps, left, right=None, leftidxs=None, rightidxs=None)
             output_frame[:right.shape[0], left.shape[1]:(left.shape[1]+right.shape[1])] = \
                     tonemap(right[:,:,ridx])
 
-        vw.write(output_frame)
+        for cidx in xrange(3):
+            rgba_output[:,:,cidx] = output_frame
+        vw.write(rgba_output)
 
 def main():
     options = docopt(__doc__)

@@ -85,7 +85,7 @@ def main():
     h5 = h5py.File(options['<hdf5>'])
 
     input_frames = h5['input']
-    denoised_frames = h5['denoised']
+    denoised_frames = h5['median_shrink']
 
     if options['--write-input'] is not None:
         logging.info('Writing input frames to "{0}"'.format(options['--write-input']))

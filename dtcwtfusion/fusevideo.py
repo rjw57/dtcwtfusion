@@ -266,7 +266,15 @@ def main():
     output_shape = tuple(output_shape)
 
     # These datasets will be created in the loop below
-    fused_frames = denoised_frames = None
+    mean_frames = None
+    median_frames = None
+    ninety_frames = None
+    max_inlier_frames = None
+
+    mean_shrink_frames = None
+    median_shrink_frames = None
+    ninety_shrink_frames = None
+    max_inlier_shrink_frames = None
 
     # Select reference frames according to window
     frame_indices = output.create_dataset('processed_indices',
@@ -304,44 +312,126 @@ def main():
             phases.append(sum_)
 
         # Compute mean, maximum and maximum-of-inliers magnitudes
-        mean_mags, max_mags, max_inlier_mags = [], [], []
+        mean_mags, median_mags, ninety_mags, max_inlier_mags = [], [], [], []
         for level_sb in highpasses:
             mags = np.abs(level_sb)
 
             mean_mags.append(np.mean(mags, axis=3))
-            max_mags.append(np.max(mags, axis=3))
+            median_mags.append(np.median(mags, axis=3))
+            ninety_mags.append(np.percentile(mags, 90, axis=3))
 
             thresh = 2*np.repeat(np.median(mags, axis=3)[:,:,:,np.newaxis], level_sb.shape[3], axis=3)
             outlier_suppressed = np.where(mags < thresh, mags, 0)
             max_inlier_mags.append(np.max(outlier_suppressed, axis=3))
 
         # Reconstruct frames
-        logging.info('Computing maximum of inliners magnitude fused image')
+        logging.info('Computing fused image')
+        mean_recon = reconstruct(lowpass_mean,
+                tuple(mag*phase for mag, phase in zip(mean_mags, phases)))
+        median_recon = reconstruct(lowpass_mean,
+                tuple(mag*phase for mag, phase in zip(median_mags, phases)))
+        ninety_recon = reconstruct(lowpass_mean,
+                tuple(mag*phase for mag, phase in zip(ninety_mags, phases)))
         max_inlier_recon = reconstruct(lowpass_mean,
                 tuple(mag*phase for mag, phase in zip(max_inlier_mags, phases)))
 
-        if fused_frames is None:
-            fused_frames = output.create_dataset('fused',
+        if mean_frames is None:
+            mean_frames = output.create_dataset('mean_fused',
+                    mean_recon.shape + (output_shape[2],),
+                    chunks=mean_recon.shape + (1,), compression='gzip',
+                    dtype=mean_recon.dtype)
+            mean_frames.attrs.create('description',
+                    'Aligned, registered and wavelet fused frames (mean)')
+            mean_frames.attrs.create('frame_count', 0)
+
+        if median_frames is None:
+            median_frames = output.create_dataset('median_fused',
+                    median_recon.shape + (output_shape[2],),
+                    chunks=median_recon.shape + (1,), compression='gzip',
+                    dtype=median_recon.dtype)
+            median_frames.attrs.create('description',
+                    'Aligned, registered and wavelet fused frames (median)')
+            median_frames.attrs.create('frame_count', 0)
+
+        if ninety_frames is None:
+            ninety_frames = output.create_dataset('ninety_fused',
+                    ninety_recon.shape + (output_shape[2],),
+                    chunks=ninety_recon.shape + (1,), compression='gzip',
+                    dtype=ninety_recon.dtype)
+            ninety_frames.attrs.create('description',
+                    'Aligned, registered and wavelet fused frames (ninetieth percentile)')
+            ninety_frames.attrs.create('frame_count', 0)
+
+        if max_inlier_frames is None:
+            max_inlier_frames = output.create_dataset('max_inlier_fused',
                     max_inlier_recon.shape + (output_shape[2],),
                     chunks=max_inlier_recon.shape + (1,), compression='gzip',
                     dtype=max_inlier_recon.dtype)
-            fused_frames.attrs.create('description', 'Aligned, registered and wavelet fused frames')
-            fused_frames.attrs.create('frame_count', 0)
+            max_inlier_frames.attrs.create('description',
+                    'Aligned, registered and wavelet fused frames (max inlier)')
+            max_inlier_frames.attrs.create('frame_count', 0)
 
-        fused_frames[:,:,fused_frames.attrs['frame_count']] = max_inlier_recon
-        fused_frames.attrs['frame_count'] += 1
+        mean_frames[:,:,mean_frames.attrs['frame_count']] = mean_recon
+        mean_frames.attrs['frame_count'] += 1
+        median_frames[:,:,median_frames.attrs['frame_count']] = median_recon
+        median_frames.attrs['frame_count'] += 1
+        ninety_frames[:,:,ninety_frames.attrs['frame_count']] = ninety_recon
+        ninety_frames.attrs['frame_count'] += 1
+        max_inlier_frames[:,:,max_inlier_frames.attrs['frame_count']] = max_inlier_recon
+        max_inlier_frames.attrs['frame_count'] += 1
 
-        logging.info('Computing maximum of inliners magnitude fused image w/ shrinkage')
+        logging.info('Computing fused image w/ shrinkage')
+        mean_shrink_recon = reconstruct(lowpass_mean,
+                shrink_coeffs(tuple(mag*phase for mag, phase in zip(mean_mags, phases))))
+        median_shrink_recon = reconstruct(lowpass_mean,
+                shrink_coeffs(tuple(mag*phase for mag, phase in zip(median_mags, phases))))
+        ninety_shrink_recon = reconstruct(lowpass_mean,
+                shrink_coeffs(tuple(mag*phase for mag, phase in zip(ninety_mags, phases))))
         max_inlier_shrink_recon = reconstruct(lowpass_mean,
                 shrink_coeffs(tuple(mag*phase for mag, phase in zip(max_inlier_mags, phases))))
 
-        if denoised_frames is None:
-            denoised_frames = output.create_dataset('denoised',
+        if mean_shrink_frames is None:
+            mean_shrink_frames = output.create_dataset('mean_shrink',
+                    mean_shrink_recon.shape + (output_shape[2],),
+                    chunks=output_shape[:2] + (1,), compression='gzip',
+                    dtype=mean_shrink_recon.dtype)
+            mean_shrink_frames.attrs.create('description',
+                    'Fused frames after wavelet shrinkage (mean)')
+            mean_shrink_frames.attrs.create('frame_count', 0)
+
+        if median_shrink_frames is None:
+            median_shrink_frames = output.create_dataset('median_shrink',
+                    median_shrink_recon.shape + (output_shape[2],),
+                    chunks=output_shape[:2] + (1,), compression='gzip',
+                    dtype=median_shrink_recon.dtype)
+            median_shrink_frames.attrs.create('description',
+                    'Fused frames after wavelet shrinkage (median)')
+            median_shrink_frames.attrs.create('frame_count', 0)
+
+        if ninety_shrink_frames is None:
+            ninety_shrink_frames = output.create_dataset('ninety_shrink',
+                    ninety_shrink_recon.shape + (output_shape[2],),
+                    chunks=output_shape[:2] + (1,), compression='gzip',
+                    dtype=ninety_shrink_recon.dtype)
+            ninety_shrink_frames.attrs.create('description',
+                    'Fused frames after wavelet shrinkage (ninetieth percentile)')
+            ninety_shrink_frames.attrs.create('frame_count', 0)
+
+        if max_inlier_shrink_frames is None:
+            max_inlier_shrink_frames = output.create_dataset('max_inlier_shrink',
                     max_inlier_shrink_recon.shape + (output_shape[2],),
                     chunks=output_shape[:2] + (1,), compression='gzip',
                     dtype=max_inlier_shrink_recon.dtype)
-            denoised_frames.attrs.create('description', 'Fused frames after wavelet shrinkage')
-            denoised_frames.attrs.create('frame_count', 0)
+            max_inlier_shrink_frames.attrs.create('description',
+                    'Fused frames after wavelet shrinkage (max inlier)')
+            max_inlier_shrink_frames.attrs.create('frame_count', 0)
 
-        denoised_frames[:,:,denoised_frames.attrs['frame_count']] = max_inlier_shrink_recon
-        denoised_frames.attrs['frame_count'] += 1
+        mean_shrink_frames[:,:,mean_shrink_frames.attrs['frame_count']] = mean_shrink_recon
+        mean_shrink_frames.attrs['frame_count'] += 1
+        median_shrink_frames[:,:,median_shrink_frames.attrs['frame_count']] = median_shrink_recon
+        median_shrink_frames.attrs['frame_count'] += 1
+        ninety_shrink_frames[:,:,ninety_shrink_frames.attrs['frame_count']] = ninety_shrink_recon
+        ninety_shrink_frames.attrs['frame_count'] += 1
+        max_inlier_shrink_frames[:,:,max_inlier_shrink_frames.attrs['frame_count']] = \
+                max_inlier_shrink_recon
+        max_inlier_shrink_frames.attrs['frame_count'] += 1

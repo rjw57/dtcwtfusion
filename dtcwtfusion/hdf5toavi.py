@@ -90,12 +90,6 @@ def main():
 
         write_output(options['--write-input'], fps, input_frames)
 
-        #vw = cv2.VideoWriter(options['--write-input'], cv2.cv.FOURCC(*'MJPG'),
-        #        fps, input_frames.shape[1::-1], False)
-        #for idx in xrange(input_frames.shape[2]):
-        #    vw.write(tonemap(input_frames[:,:,idx]))
-        #vw.release()
-
     logging.info('Writing fused and denoised frames to "{0}"'.format(options['<avi>']))
     if options['--comparison']:
         write_output(options['<avi>'], fps,
@@ -103,8 +97,3 @@ def main():
                 leftidxs=h5['processed_indices'])
     else:
         write_output(options['<avi>'], fps, denoised_frames)
-    #vw = cv2.VideoWriter(options['<avi>'], cv2.cv.FOURCC(*'MJPG'),
-    #        fps, denoised_frames.shape[1::-1], False)
-    #for idx in xrange(denoised_frames.attrs['frame_count']):
-    #    vw.write(tonemap(denoised_frames[:,:,idx]))
-    #vw.release()

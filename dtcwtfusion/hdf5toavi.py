@@ -59,7 +59,7 @@ def write_output(filename, fps, left, right=None, leftidxs=None, rightidxs=None)
         else:
             rightidxs = leftidxs
 
-    vw = cv2.VideoWriter(filename, cv2.cv.FOURCC(*'MJPG'),
+    vw = cv2.VideoWriter(filename, cv2.cv.FOURCC(*'MPNG'),
             fps, output_frame.shape[::-1], False)
 
     for lidx, ridx in itertools.izip(leftidxs, rightidxs):
@@ -70,8 +70,6 @@ def write_output(filename, fps, left, right=None, leftidxs=None, rightidxs=None)
                     tonemap(right[:,:,ridx])
 
         vw.write(output_frame)
-
-    vw.release()
 
 def main():
     options = docopt(__doc__)

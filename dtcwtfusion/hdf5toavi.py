@@ -59,7 +59,7 @@ def write_output(filename, fps, left, right=None, leftidxs=None, rightidxs=None)
         else:
             rightidxs = leftidxs
 
-    vw = cv2.VideoWriter(filename, cv2.cv.FOURCC(*'MPNG'),
+    vw = cv2.VideoWriter(filename, cv2.cv.FOURCC(*'MJPG'),
             fps, output_frame.shape[::-1], False)
 
     for lidx, ridx in itertools.izip(leftidxs, rightidxs):

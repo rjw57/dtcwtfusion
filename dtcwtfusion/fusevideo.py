@@ -11,7 +11,7 @@ Options:
     -n, --normalise                     Re-normalise input frames to lie on the
                                         interval [0,1].
     -v, --verbose                       Increase logging verbosity.
-    -w FRAMES, --window=FRAMES          Sliding half-window size. [default: 5]
+    -w FRAMES, --window=FRAMES          Sliding window size. [default: 8]
 
 Output will be saved in HDF5 format to <output>. Input is read from the TIFF
 files listed as <frames>...
@@ -235,10 +235,13 @@ def main():
     input_frames.attrs.create('description', 'Input frames')
 
     # Check there are enough frames
-    half_window_size = int(options['--window'])
-    if input_frames.shape[2] - (2*half_window_size + 1) <= 0:
+    window_size = int(options['--window'])
+    if window_size < 2:
+        logging.error('Window size must be at least 2')
+        sys.exit(1)
+    if input_frames.shape[2] - window_size <= 0:
         logging.error('Too few frames ({0}) for half window size ({1})'.format(
-            input_frames.shape[2], half_window_size))
+            input_frames.shape[2], window_size))
         sys.exit(1)
 
     # Create storage for output
@@ -284,7 +287,7 @@ def main():
         registered_frame = register(aligned_frames, reference_frame)[...,0]
 
         # Update reference frame
-        oo_aperture = 1.0 / min(ref_idx+1, 2*half_window_size+1)
+        oo_aperture = 1.0 / min(ref_idx+1, window_size)
         reference_frame = (1-oo_aperture) * reference_frame + oo_aperture * registered_frame
 
         # Re-register
@@ -297,7 +300,7 @@ def main():
         transforms_to_fuse.append(transform.forward(registered_frame, nlevels=nlevels))
 
         # Make sure list of transforms is always < aperture in length
-        transforms_to_fuse = transforms_to_fuse[-(2*half_window_size+1):]
+        transforms_to_fuse = transforms_to_fuse[-window_size:]
 
         # Extract lowpasses and highpasses
         lowpasses = np.dstack(list(p.lowpass for p in transforms_to_fuse))

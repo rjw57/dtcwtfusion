@@ -160,25 +160,6 @@ def register(frames, template, nlevels=7):
 
     return np.dstack(warped_ims)
 
-def transform_frames(frames, nlevels=7):
-    # Transform each registered frame storing result
-    lowpasses = []
-    highpasses = []
-    for idx in xrange(nlevels):
-        highpasses.append([])
-
-    transform = dtcwt.Transform2d()
-    for frame_idx in xrange(frames.shape[2]):
-        logging.info('Transforming frame {0}/{1}'.format(frame_idx+1, frames.shape[2]))
-        frame = frames[:,:,frame_idx]
-        frame_t = transform.forward(frame, nlevels=nlevels)
-
-        lowpasses.append(frame_t.lowpass)
-        for idx in xrange(nlevels):
-            highpasses[idx].append(frame_t.highpasses[idx][:,:,:,np.newaxis])
-
-    return np.dstack(lowpasses), tuple(np.concatenate(hp, axis=3) for hp in highpasses)
-
 def reconstruct(lowpass, highpasses):
     transform = dtcwt.Transform2d()
     t = dtcwt.Pyramid(lowpass, highpasses)
@@ -262,7 +243,7 @@ def main():
 
     # Create storage for output
     output_shape = list(input_frames.shape)
-    output_shape[2] -= (2*half_window_size + 1)
+    output_shape[2] -= 1
     output_shape = tuple(output_shape)
 
     # These datasets will be created in the loop below
@@ -278,26 +259,57 @@ def main():
 
     # Select reference frames according to window
     frame_indices = output.create_dataset('processed_indices',
-            data=np.arange(input_frames.shape[2])[half_window_size:-(half_window_size+1)],
+            data=np.arange(input_frames.shape[2])[1:],
             compression='gzip')
     frame_indices.attrs.create('description', 'Slice indices into /frames for each frame of output')
-    for ref_idx in frame_indices:
+
+    transform = dtcwt.Transform2d()
+
+    reference_frame = None
+    transforms_to_fuse = []
+    for ref_idx in xrange(input_frames.shape[2]):
         logging.info('Processing frame {0}'.format(ref_idx))
 
-        reference_frame = input_frames[:,:,ref_idx]
-        stack = input_frames[:,:,ref_idx-half_window_size:ref_idx+half_window_size+1]
+        raw_input_frame = input_frames[:,:,ref_idx]
+        if reference_frame is None:
+            reference_frame = raw_input_frame
+            continue
 
-        # Align frames to *centre* frame
-        logging.info('Aligning frames')
-        aligned_frames = align(stack, reference_frame)
+        # Align input to reference frame
+        logging.info('Aligning raw input')
+        aligned_frames = align(raw_input_frame[...,np.newaxis], reference_frame)
 
-        # Register frames
-        logging.info('Registering frames')
-        registration_reference = reference_frame
-        registered_frames = register(aligned_frames, registration_reference)
+        # Register aligned frame
+        logging.info('Registering raw input')
+        registered_frame = register(aligned_frames, reference_frame)[...,0]
+
+        # Update reference frame
+        oo_aperture = 1.0 / min(ref_idx+1, 2*half_window_size+1)
+        reference_frame = (1-oo_aperture) * reference_frame + oo_aperture * registered_frame
+
+        # Re-register
+        logging.info('Registering raw input to new reference')
+        registered_frame = register(aligned_frames, reference_frame)[...,0]
 
         # Transform registered frames
-        lowpasses, highpasses = transform_frames(registered_frames)
+        logging.info('Transforming registered frame')
+        nlevels = 7
+        transforms_to_fuse.append(transform.forward(registered_frame, nlevels=nlevels))
+
+        # Make sure list of transforms is always < aperture in length
+        transforms_to_fuse = transforms_to_fuse[-(2*half_window_size+1):]
+
+        # Extract lowpasses and highpasses
+        lowpasses = np.dstack(list(p.lowpass for p in transforms_to_fuse))
+        highpasses = []
+        for idx in xrange(nlevels):
+            highpasses.append([])
+
+        for p in transforms_to_fuse:
+            for idx in xrange(nlevels):
+                highpasses[idx].append(p.highpasses[idx][:,:,:,np.newaxis])
+
+        highpasses = tuple(np.concatenate(hp, axis=3) for hp in highpasses)
 
         # Compute mean lowpass image
         lowpass_mean = np.mean(lowpasses, axis=2)

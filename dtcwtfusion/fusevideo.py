@@ -232,7 +232,7 @@ def main():
     # Load inputs
     logging.info('Loading input frames')
     input_frames = load_frames(output, options['<frames>'], options['--normalise'])
-    input_frames.attrs.create('description', 'Input frames')
+    input_frames.attrs.create('description', 'Input frames'.encode('utf-8'))
 
     # Check there are enough frames
     window_size = int(options['--window'])
@@ -264,7 +264,8 @@ def main():
     frame_indices = output.create_dataset('processed_indices',
             data=np.arange(input_frames.shape[2])[1:],
             compression='gzip')
-    frame_indices.attrs.create('description', 'Slice indices into /frames for each frame of output')
+    frame_indices.attrs.create('description',
+            'Slice indices into /frames for each frame of output'.encode('utf-8'))
 
     transform = dtcwt.Transform2d()
 
@@ -356,7 +357,7 @@ def main():
                     chunks=mean_recon.shape + (1,), compression='gzip',
                     dtype=mean_recon.dtype)
             mean_frames.attrs.create('description',
-                    'Aligned, registered and wavelet fused frames (mean)')
+                    'Aligned, registered and wavelet fused frames (mean)'.encode('utf-8'))
             mean_frames.attrs.create('frame_count', 0)
 
         if median_frames is None:
@@ -365,7 +366,7 @@ def main():
                     chunks=median_recon.shape + (1,), compression='gzip',
                     dtype=median_recon.dtype)
             median_frames.attrs.create('description',
-                    'Aligned, registered and wavelet fused frames (median)')
+                    'Aligned, registered and wavelet fused frames (median)'.encode('utf-8'))
             median_frames.attrs.create('frame_count', 0)
 
         if ninety_frames is None:
@@ -374,7 +375,7 @@ def main():
                     chunks=ninety_recon.shape + (1,), compression='gzip',
                     dtype=ninety_recon.dtype)
             ninety_frames.attrs.create('description',
-                    'Aligned, registered and wavelet fused frames (ninetieth percentile)')
+                    'Aligned, registered and wavelet fused frames (ninetieth percentile)'.encode('utf-8'))
             ninety_frames.attrs.create('frame_count', 0)
 
         if max_inlier_frames is None:
@@ -383,7 +384,7 @@ def main():
                     chunks=max_inlier_recon.shape + (1,), compression='gzip',
                     dtype=max_inlier_recon.dtype)
             max_inlier_frames.attrs.create('description',
-                    'Aligned, registered and wavelet fused frames (max inlier)')
+                    'Aligned, registered and wavelet fused frames (max inlier)'.encode('utf-8'))
             max_inlier_frames.attrs.create('frame_count', 0)
 
         mean_frames[:,:,mean_frames.attrs['frame_count']] = mean_recon
@@ -411,7 +412,7 @@ def main():
                     chunks=output_shape[:2] + (1,), compression='gzip',
                     dtype=mean_shrink_recon.dtype)
             mean_shrink_frames.attrs.create('description',
-                    'Fused frames after wavelet shrinkage (mean)')
+                    'Fused frames after wavelet shrinkage (mean)'.encode('utf-8'))
             mean_shrink_frames.attrs.create('frame_count', 0)
 
         if median_shrink_frames is None:
@@ -420,7 +421,7 @@ def main():
                     chunks=output_shape[:2] + (1,), compression='gzip',
                     dtype=median_shrink_recon.dtype)
             median_shrink_frames.attrs.create('description',
-                    'Fused frames after wavelet shrinkage (median)')
+                    'Fused frames after wavelet shrinkage (median)'.encode('utf-8'))
             median_shrink_frames.attrs.create('frame_count', 0)
 
         if ninety_shrink_frames is None:
@@ -429,7 +430,7 @@ def main():
                     chunks=output_shape[:2] + (1,), compression='gzip',
                     dtype=ninety_shrink_recon.dtype)
             ninety_shrink_frames.attrs.create('description',
-                    'Fused frames after wavelet shrinkage (ninetieth percentile)')
+                    'Fused frames after wavelet shrinkage (ninetieth percentile)'.encode('utf-8'))
             ninety_shrink_frames.attrs.create('frame_count', 0)
 
         if max_inlier_shrink_frames is None:
@@ -438,7 +439,7 @@ def main():
                     chunks=output_shape[:2] + (1,), compression='gzip',
                     dtype=max_inlier_shrink_recon.dtype)
             max_inlier_shrink_frames.attrs.create('description',
-                    'Fused frames after wavelet shrinkage (max inlier)')
+                    'Fused frames after wavelet shrinkage (max inlier)'.encode('utf-8'))
             max_inlier_shrink_frames.attrs.create('frame_count', 0)
 
         mean_shrink_frames[:,:,mean_shrink_frames.attrs['frame_count']] = mean_shrink_recon

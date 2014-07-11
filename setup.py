@@ -25,7 +25,7 @@ setup(
         'console_scripts': [
             'fuseimages = dtcwtfusion.fuseimages:main',
             'fusevideo = dtcwtfusion.fusevideo:main',
-            'hdf5toavi = dtcwtfusion.hdf5toavi:main',
+            'hdf5toraw = dtcwtfusion.hdf5toraw:main',
         ],
     },
 

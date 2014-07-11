@@ -1,10 +1,10 @@
 # vim: set fileencoding=utf8 :
 
-"""Convert output from fusevideo to MJPEG files.
+"""Convert output from fusevideo to raw video frames.
 
 Usage:
-    hdf5toavi [options] <hdf5> <avi>
-    hdf5toavi (-h | --help)
+    hdf5toraw [options] <hdf5> [<output>]
+    hdf5toraw (-h | --help)
 
 Options:
     -v, --verbose                       Increase logging verbosity.
@@ -13,6 +13,30 @@ Options:
     --fps=NUM                           Set frames per second. [default: 10]
     -g NAME, --group=NAME               Which group from the HDF5 should be rendered
                                         [default: median_shrink]
+    --print-size                        Do not generate output but print the size of
+                                        output frames.
+
+    <hdf5>                              HDF5 file as produced by fusevideo.
+    <output>                            If specified, file to write output to. If not
+                                        specified, write to standard output.
+
+Video encoding:
+
+    -f, --ffmpeg                        Use ffmpeg to encode raw data. In which
+                                        case, <output> becomes the file which
+                                        ffmpeg encodes to.
+    --ffmpeg-binary=FILE                Use FILE as the ffmpeg binary. If not
+                                        an absolute path, it is resolved using
+                                        the current PATH value.
+                                        [default: ffmpeg]
+    --bitrate=BITRATE                   Bitrate to pass to ffmpeg binary. [default: 10M]
+    --ffmpeg-extra-opts=OPTS            Extra options to pass to the ffmpeg binary.
+
+To use the ffmpeg utility to convert input.h5 into output.mp4, you can use the
+following command:
+
+    $ hdf5toraw input.h5 | ffmpeg -y -f rawvideo -pix_fmt rgb24 \
+            -s `hdf5toraw --print-size input.h5` -i - -r 10 -vb 15M output.mp4
 
 """
 
@@ -25,7 +49,6 @@ import sys
 from docopt import docopt
 from six.moves import xrange
 import h5py
-import cv2
 import numpy as np
 
 def tonemap(array):
@@ -40,7 +63,8 @@ def tonemap(array):
 
     return np.array(norm_array * 255, dtype=np.uint8)
 
-def write_output(filename, fps, left, right=None, leftidxs=None, rightidxs=None):
+def write_output(fobj, fps, left, right=None, leftidxs=None, rightidxs=None,
+        print_size=False):
     if right is None:
         output_shape = left.shape[:2]
         n_frames = left.shape[2]
@@ -61,10 +85,8 @@ def write_output(filename, fps, left, right=None, leftidxs=None, rightidxs=None)
         else:
             rightidxs = leftidxs
 
-    vw = cv2.VideoWriter(filename, cv2.cv.FOURCC(*'MJPG'), fps, output_frame.shape[::-1])
-
     rgba_output = np.ones(output_frame.shape + (3,), dtype=np.uint8)
-    for lidx, ridx in itertools.izip(leftidxs, rightidxs):
+    for lidx, ridx in zip(leftidxs, rightidxs):
         output_frame[:left.shape[0], :left.shape[1]] = tonemap(left[:,:,lidx])
 
         if right is not None:
@@ -73,7 +95,20 @@ def write_output(filename, fps, left, right=None, leftidxs=None, rightidxs=None)
 
         for cidx in xrange(3):
             rgba_output[:,:,cidx] = output_frame
-        vw.write(rgba_output)
+
+        if print_size:
+            print('{0[1]}x{0[0]}'.format(rgba_output.shape))
+            return
+
+        fobj.write(np.ravel(rgba_output, order='C').tostring())
+
+def my_open(filename):
+    """Like open() except that a) the file is opened in binary mode and b) if
+    filename is '-' or None then stdout is returned.
+    """
+    if filename == '-' or filename is None:
+        return sys.stdout.buffer
+    return open(filename, 'wb')
 
 def main():
     options = docopt(__doc__)
@@ -92,12 +127,17 @@ def main():
     if options['--write-input'] is not None:
         logging.info('Writing input frames to "{0}"'.format(options['--write-input']))
 
-        write_output(options['--write-input'], fps, input_frames)
+        write_output(my_open(options['--write-input']), fps, input_frames)
 
-    logging.info('Writing "{1}" frames to "{0}"'.format(options['<avi>'], options['--group']))
+    logging.info('Writing "{1}" frames to "{0}"'.format(options['<output>'], options['--group']))
+
+    output_fobj = my_open(options['<output>']) if not options['--print-size'] else None
+
     if options['--comparison']:
-        write_output(options['<avi>'], fps,
+        write_output(output_fobj, fps,
                 left=input_frames, right=denoised_frames,
-                leftidxs=h5['processed_indices'])
+                leftidxs=h5['processed_indices'],
+                print_size=options['--print-size'])
     else:
-        write_output(options['<avi>'], fps, denoised_frames)
+        write_output(output_fobj, fps, denoised_frames,
+                print_size=options['--print-size'])

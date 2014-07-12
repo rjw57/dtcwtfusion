@@ -268,6 +268,7 @@ def main():
             'Slice indices into /frames for each frame of output'.encode('utf-8'))
 
     transform = dtcwt.Transform2d()
+    nlevels = 4
 
     reference_frame = None
     transforms_to_fuse = []
@@ -285,7 +286,7 @@ def main():
 
         # Register aligned frame
         logging.info('Registering raw input')
-        registered_frame = register(aligned_frames, reference_frame)[...,0]
+        registered_frame = register(aligned_frames, reference_frame, nlevels=nlevels)[...,0]
 
         # Update reference frame
         oo_aperture = 1.0 / min(ref_idx+1, window_size)
@@ -293,11 +294,10 @@ def main():
 
         # Re-register
         logging.info('Registering raw input to new reference')
-        registered_frame = register(aligned_frames, reference_frame)[...,0]
+        registered_frame = register(aligned_frames, reference_frame, nlevels=nlevels)[...,0]
 
         # Transform registered frames
         logging.info('Transforming registered frame')
-        nlevels = 7
         transforms_to_fuse.append(transform.forward(registered_frame, nlevels=nlevels))
 
         # Make sure list of transforms is always < aperture in length

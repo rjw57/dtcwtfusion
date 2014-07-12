@@ -244,6 +244,8 @@ def main():
     loglevel = logging.INFO if options['--verbose'] else logging.WARN
     logging.basicConfig(level=loglevel)
 
+    nlevels = 4
+
     # Open output
     logging.info('Creating output HDF5 file at "{0}"'.format(options['<output>']))
     output = h5py.File(options['<output>'], 'w')
@@ -294,10 +296,10 @@ def main():
         # Register frames
         logging.info('Registering frames')
         registration_reference = reference_frame
-        registered_frames = register(aligned_frames, registration_reference)
+        registered_frames = register(aligned_frames, registration_reference, nlevels)
 
         # Transform registered frames
-        lowpasses, highpasses = transform_frames(registered_frames)
+        lowpasses, highpasses = transform_frames(registered_frames, nlevels)
 
         # Compute mean lowpass image
         lowpass_mean = np.mean(lowpasses, axis=2)

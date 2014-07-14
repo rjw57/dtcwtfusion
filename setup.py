@@ -26,6 +26,7 @@ setup(
             'fuseimages = dtcwtfusion.fuseimages:main',
             'fusevideo = dtcwtfusion.fusevideo:main',
             'hdf5toraw = dtcwtfusion.hdf5toraw:main',
+            'hdf5toimg = dtcwtfusion.hdf5toimg:main',
         ],
     },
 

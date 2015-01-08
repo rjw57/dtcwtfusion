@@ -4,8 +4,8 @@
 DTCWT fusion algorithm.
 
 Usage:
-    fuseframes [options] <frames>...
-    fuseframes (-h | --help)
+    fuseimages [options] <frames>...
+    fuseimages (-h | --help)
 
 Options:
     -n, --normalise                     Re-normalise input frames to lie on the
